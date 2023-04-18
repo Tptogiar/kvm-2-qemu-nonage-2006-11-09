@@ -1,0 +1,99 @@
+#!/usr/bin/python
+
+import sys, os, time
+import optparse
+
+optparser = optparse.OptionParser()
+
+optparser.add_option('--no-reload-module',
+                     help = 'do not reload kvm module',
+                     action = 'store_false',
+                     dest = 'reload',
+                     default = True,
+                     )
+
+optparser.add_option('--install',
+                     help = 'start up guest in installer boot cd',
+                     action = 'store_true',
+                     default = False,
+                     )
+
+optparser.add_option('--debugger',
+                     help = 'wait for gdb',
+                     action = 'store_true',
+                     default = False,
+                     )
+
+optparser.add_option('--no-kvm',
+                     help = 'use standard qemu, without kvm',
+                     action = 'store_false',
+                     dest = 'kvm',
+                     default = True,
+                     )
+optparser.add_option('--image',
+                     help = 'select disk image',
+                     dest = 'image',
+                     default = '/tmp/disk',
+                     )
+optparser.add_option('--cdrom',
+                     help = 'select cdrom image',
+                     dest = 'cdrom',
+                     default = '/data/mirror/fedora/core/5/x86_64/os/images/boot.iso',
+                     )
+
+(options, args) = optparser.parse_args(sys.argv)
+
+if options.kvm and options.reload:
+    for x in os.popen4('/sbin/lsmod')[1].readlines():
+        if x.startswith('kvm '):
+            if os.spawnl(os.P_WAIT, '/sbin/rmmod', 'rmmod', 'kvm') != 0:
+                raise Exception('failed to remove kvm module')
+    if os.spawnl(os.P_WAIT, '/sbin/insmod', 'insmod', 'kernel/kvm.ko') != 0:
+        raise Exception('failed to load kvm module')
+    for i in range(5):
+        if os.access('/dev/kvm', os.F_OK):
+            break
+        time.sleep(0.1 + 0.2 * i)
+    if not os.access('/dev/kvm', os.F_OK):
+        print '/dev/kvm not present'
+
+disk = options.image
+if options.install:
+    fd = file(disk, 'w')
+    fd.truncate()
+    fd.seek(10*1024*1024*1024-1)
+    fd.write('\0')
+    fd.close()
+
+bootdisk = 'c'
+if options.install:
+    bootdisk = 'd'
+
+import platform
+arch = platform.machine()
+# check 32-bit userspace on 64-bit kernel
+if platform.architecture()[0] == '32bit':
+    arch = 'i386'
+
+if arch == 'x86_64':
+    cmd = 'qemu-system-' + arch
+else:
+    cmd = 'qemu'
+
+cmd = 'qemu/' + arch + '-softmmu/' + cmd
+
+qemu_args = (cmd, '-cdrom', options.cdrom, '-boot', bootdisk,
+             '-L', '/usr/share/qemu', '-hda', disk, '-m', '384',
+             '-serial', 'file:/tmp/serial.log',
+          )
+
+if not options.kvm:
+    qemu_args += ('-no-kvm',)
+
+if options.debugger:
+    qemu_args += ('-s',)
+
+def concat_func(x,y): return x + ' ' + y
+print 'Running %s' % reduce(concat_func, qemu_args)
+
+os.execvp(cmd, qemu_args)
