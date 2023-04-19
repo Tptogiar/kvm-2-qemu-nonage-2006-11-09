@@ -209,6 +209,7 @@ enum vmcs_field {
 /*
  * Interruption-information format
  */
+// Table 25-19.  Format of the IDT-Vectoring Information Field
 #define INTR_INFO_VECTOR_MASK           0xff            /* 7:0 */
 #define INTR_INFO_INTR_TYPE_MASK        0x700           /* 10:8 */
 #define INTR_INFO_DELIEVER_CODE_MASK    0x800           /* 11 */

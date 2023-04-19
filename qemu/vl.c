@@ -5604,7 +5604,7 @@ static BOOL WINAPI qemu_ctrl_handler(DWORD type)
 
 #define MAX_NET_CLIENTS 32
 
-int main(int argc, char **argv)
+int main(int argc, char **argv)  // qemu主程序启动函数
 {
 #ifdef CONFIG_GDBSTUB
     int use_gdbstub, gdbstub_port;
