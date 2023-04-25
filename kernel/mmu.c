@@ -127,7 +127,7 @@
 	(PAGE_MASK & ~((1ULL << (PAGE_SHIFT + PT32_LEVEL_BITS)) - 1))
 
 
-#define PFERR_PRESENT_MASK (1U << 0)
+#define PFERR_PRESENT_MASK (1U << 0)  // page fault error
 #define PFERR_WRITE_MASK (1U << 1)
 #define PFERR_USER_MASK (1U << 2)
 
@@ -331,7 +331,7 @@ static gpa_t nonpaging_gva_to_gpa(struct kvm_vcpu *vcpu, gva_t vaddr)
 	return vaddr;
 }
 
-static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,
+static int nonpaging_page_fault(struct kvm_vcpu *vcpu, gva_t gva,  // 影子页表page fault
 			       u32 error_code)
 {
 	int ret;

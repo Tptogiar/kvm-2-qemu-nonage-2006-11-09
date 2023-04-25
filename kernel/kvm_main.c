@@ -1932,7 +1932,7 @@ static int handle_rmode_exception(struct kvm_vcpu *vcpu,
 			return 1;
 	return 0;
 }
-
+// handle NMI or exception
 static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
 	u32 intr_info, error_code;
@@ -1940,34 +1940,35 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u32 vect_info;
 	enum emulation_result er;
 
-	vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
-	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
+	vect_info = vmcs_read32(IDT_VECTORING_INFO_FIELD); // 间接向量事件，guest-IDT dilivery的事件
+	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);  // 直接事件，直接引发exit的事件
 
-	if ((vect_info & VECTORING_INFO_VALID_MASK) &&
+	if ((vect_info & VECTORING_INFO_VALID_MASK) &&   // 在guest-IDT delivery时产生了exit，但又不是pf
 						!is_page_fault(intr_info)) {
 		printk(KERN_ERR "%s: unexpected, vectoring info 0x%x "
 		       "intr info 0x%x\n", __FUNCTION__, vect_info, intr_info);
 	}
 
-	if (is_external_interrupt(vect_info)) {        // 如果是外部中断
+	if (is_external_interrupt(vect_info)) {        // 如果是外部中断           (?todo?:外部中断就必须得被guest处理?,有没有可能是host自己的设备给host的？)
 		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;   // 获取中断vector
 		set_bit(irq, vcpu->irq_pending);
-		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
+		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);  // 标记，需要注入中断
 	}
 
-	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */
-		asm ("int $2");
+	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */  // guest-IDT delivery时，引发vm-exit的事件为NMI
+		asm ("int $2");   // 让host来处理NMI
 		return 1;
 	}
 	error_code = 0;
 	rip = vmcs_readl(GUEST_RIP);
-	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)
+	if (intr_info & INTR_INFO_DELIEVER_CODE_MASK)  // 如果有错误码
 		error_code = vmcs_read32(VM_EXIT_INTR_ERROR_CODE);
 	if (is_page_fault(intr_info)) {
 		cr2 = vmcs_readl(EXIT_QUALIFICATION);
 
 		spin_lock(&vcpu->kvm->lock);
-		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code)) {
+		// 成功返回0     static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
+		if (!vcpu->mmu.page_fault(vcpu, cr2, error_code)) {   
 			spin_unlock(&vcpu->kvm->lock);
 			return 1;
 		}
@@ -1978,7 +1979,7 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		switch (er) {
 		case EMULATE_DONE:
 			return 1;
-		case EMULATE_DO_MMIO:
+		case EMULATE_DO_MMIO:   // 回到用户态qemu模拟mmio
 			++kvm_stat.mmio_exits;
 			kvm_run->exit_reason = KVM_EXIT_MMIO;
 			return 0;
@@ -1995,7 +1996,7 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 								error_code))
 		return 1;
 
-	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {
+	if ((intr_info & (INTR_INFO_INTR_TYPE_MASK | INTR_INFO_VECTOR_MASK)) == (INTR_TYPE_EXCEPTION | 1)) {  // 1->Debug
 		kvm_run->exit_reason = KVM_EXIT_DEBUG;
 		return 0;
 	}
@@ -2410,9 +2411,10 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
  * to be done to userspace and return 0.
  */
+// return大于0，且进程没有收到信号的情况下，会回到kvm_dev_ioctl_run的again标签
 static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 				      struct kvm_run *kvm_run) = {
-	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,   // 不可屏蔽中断
+	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,   // 不可屏蔽中断 或 异常
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_INVLPG]                  = handle_invlpg,
@@ -2432,7 +2434,7 @@ static const int kvm_vmx_max_exit_handlers =
  * The guest has exited.  See if we can fix it or if we need userspace
  * assistance.
  */
- // 如果return大于0有机会回到到kvm_dev_ioctl_run的again标签
+ // return大于0，且进程没有收到信号的情况下，会回到kvm_dev_ioctl_run的again标签
 static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
@@ -2506,7 +2508,7 @@ static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 
 	clear_bit(bit_index, &vcpu->irq_pending[word_index]);
 	if (!vcpu->irq_pending[word_index])
-		clear_bit(word_index, &vcpu->irq_summary);
+		clear_bit(word_index, &vcpu->irq_summary);  // 同时清空irq_summary
 
 	if (vcpu->rmode.active) {
 		inject_rmode_irq(vcpu, irq);
@@ -3053,7 +3055,7 @@ static int kvm_dev_ioctl_translate(struct kvm *kvm, struct kvm_translation *tr)
 	return 0;
 }
 
-static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)
+static int kvm_dev_ioctl_interrupt(struct kvm *kvm, struct kvm_interrupt *irq)  // 注入中断
 {
 	struct kvm_vcpu *vcpu;
 
