@@ -282,9 +282,9 @@ static int FNAME(fix_write_pf)(struct kvm_vcpu *vcpu,
  *   - normal guest page fault due to the guest pte marked not present, not
  *     writable, or not executable
  *
- *  Returns: 1 if we need to emulate the instruction, 0 otherwise
+ *  Returns: 1 if we need to emulate the instruction, 0 otherwise 返回值
  */
-static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,
+static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr,  
 			       u32 error_code)
 {
 	int write_fault = error_code & PFERR_WRITE_MASK;

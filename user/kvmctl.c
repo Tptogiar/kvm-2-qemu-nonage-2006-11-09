@@ -465,7 +465,7 @@ again:
 	}
 more:
 	if (!r)
-		goto again;   // 回到kvm
+		goto again;   // handle如果返回0，回到kvm
 	return r;
 }
 

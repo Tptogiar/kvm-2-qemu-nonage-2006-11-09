@@ -24,7 +24,7 @@
  *    Yaniv Kamay <yaniv@qumranet.com>
  *
  */
-
+// Table C-1.  Basic Exit Reasons ?
 #define CPU_BASED_VIRTUAL_INTR_PENDING  0x00000004
 #define CPU_BASED_USE_TSC_OFFSETING     0x00000008
 #define CPU_BASED_HLT_EXITING           0x00000080
@@ -104,10 +104,10 @@ enum vmcs_field {
 	SECONDARY_VM_EXEC_CONTROL       = 0x0000401e,
 	VM_INSTRUCTION_ERROR            = 0x00004400,
 	VM_EXIT_REASON                  = 0x00004402,
-	VM_EXIT_INTR_INFO               = 0x00004404,
-	VM_EXIT_INTR_ERROR_CODE         = 0x00004406,
-	IDT_VECTORING_INFO_FIELD        = 0x00004408,
-	IDT_VECTORING_ERROR_CODE        = 0x0000440a,
+	VM_EXIT_INTR_INFO               = 0x00004404,  // VM-exit interruption information 
+	VM_EXIT_INTR_ERROR_CODE         = 0x00004406,  // VM-exit interruption error code 
+	IDT_VECTORING_INFO_FIELD        = 0x00004408,  // IDT-vectoring information field 
+	IDT_VECTORING_ERROR_CODE        = 0x0000440a,  // IDT-vectoring error code 
 	VM_EXIT_INSTRUCTION_LEN         = 0x0000440c,
 	VMX_INSTRUCTION_INFO            = 0x0000440e,
 	GUEST_ES_LIMIT                  = 0x00004800,
@@ -209,9 +209,10 @@ enum vmcs_field {
 /*
  * Interruption-information format
  */
-#define INTR_INFO_VECTOR_MASK           0xff            /* 7:0 */
-#define INTR_INFO_INTR_TYPE_MASK        0x700           /* 10:8 */
-#define INTR_INFO_DELIEVER_CODE_MASK    0x800           /* 11 */
+// Table 25-19.  Format of the IDT-Vectoring Information Field
+#define INTR_INFO_VECTOR_MASK           0xff            /* 7:0 */   // vector
+#define INTR_INFO_INTR_TYPE_MASK        0x700           /* 10:8 */  // type
+#define INTR_INFO_DELIEVER_CODE_MASK    0x800           /* 11 */  // 1 -> has error code
 #define INTR_INFO_VALID_MASK            0x80000000      /* 31 */
 
 #define VECTORING_INFO_VECTOR_MASK           	INTR_INFO_VECTOR_MASK

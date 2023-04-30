@@ -1,0 +1,16 @@
+
+
+#define KVM_EXIT_IO_IN  0
+#define KVM_EXIT_IO_OUT 1
+			__u8 direction;
+			__u8 size; /* bytes */
+			__u8 string;
+			__u8 string_down;
+			__u8 rep;
+			__u8 pad;
+			__u16 port;
+			__u64 count;
+			union {
+				__u64 address;
+				__u32 value;
+			};

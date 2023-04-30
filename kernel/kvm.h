@@ -163,9 +163,10 @@ struct kvm_vcpu {
 	struct mutex mutex;
 	int   cpu;
 	int   launched;
+	// 记录中断位在irq_pending中下标为几的元素中
 	unsigned long irq_summary; /* bit vector: 1 per word in irq_pending */
-#define NR_IRQ_WORDS (256 / BITS_PER_LONG)
-	unsigned long irq_pending[NR_IRQ_WORDS];
+#define NR_IRQ_WORDS (256 / BITS_PER_LONG)    
+	unsigned long irq_pending[NR_IRQ_WORDS];  // 第n个元素的第m位表示第(n*32 + m)号中断是否处于未处理状态
 	unsigned long regs[NR_VCPU_REGS]; /* for rsp: vcpu_load_rsp_rip() */
 	unsigned long rip;      /* needs vcpu_load_rsp_rip() */
 
