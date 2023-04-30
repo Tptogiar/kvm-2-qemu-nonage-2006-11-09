@@ -37,8 +37,8 @@ struct kvm_run {
 	__u32 mmio_completed; /* mmio request completed */
 
 	/* out */
-	__u32 exit_type;
-	__u32 exit_reason;
+	__u32 exit_type;   // kvm run后的退出类型，包括run失败，vm-exit等
+	__u32 exit_reason; // kvm run后vm-exit的具体原因
 	__u32 instruction_length;
 	union {
 		/* KVM_EXIT_UNKNOWN */

@@ -178,13 +178,13 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 {
 	uint16_t addr = run->io.port;
 	struct kvm_regs regs;
-	int first_time = 1;
+	int first_time = 1;    
 	int delta;
 	struct translation_cache tr;
 
 	translation_cache_init(&tr);
 
-	regs.vcpu = run->vcpu;
+	regs.vcpu = run->vcpu;  // 为0
 	ioctl(kvm->fd, KVM_GET_REGS, &regs);
 
 	delta = run->io.string_down ? -run->io.size : run->io.size;
@@ -273,7 +273,7 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 		}
 	}
 
-	ioctl(kvm->fd, KVM_SET_REGS, &regs);
+	ioctl(kvm->fd, KVM_SET_REGS, &regs);   // 更新寄存器
 	run->emulated = 1;
 	return 0;
 }
@@ -410,7 +410,7 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	};
 
 again:
-	r = ioctl(fd, KVM_RUN, &kvm_run);
+	r = ioctl(fd, KVM_RUN, &kvm_run);  // 从kvm返回
 	kvm_run.emulated = 0;
 	kvm_run.mmio_completed = 0;
 	if (r == -1 && errno != EINTR) {
@@ -465,7 +465,7 @@ again:
 	}
 more:
 	if (!r)
-		goto again;
+		goto again;   // 回到kvm
 	return r;
 }
 

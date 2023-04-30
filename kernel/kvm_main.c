@@ -1949,8 +1949,8 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		       "intr info 0x%x\n", __FUNCTION__, vect_info, intr_info);
 	}
 
-	if (is_external_interrupt(vect_info)) {
-		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;
+	if (is_external_interrupt(vect_info)) {        // 如果是外部中断
+		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;   // 获取中断vector
 		set_bit(irq, vcpu->irq_pending);
 		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
 	}
@@ -2020,7 +2020,7 @@ static int get_io_count(struct kvm_vcpu *vcpu, u64 *count)
 	int countr_size;
 	int i, n;
 
-	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_VM)) {
+	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_VM)) { // guest是否处于虚拟实模式
 		countr_size = 2;
 	} else {
 		u32 cs_ar = vmcs_read32(GUEST_CS_AR_BYTES);
@@ -2066,24 +2066,24 @@ static int handle_io(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	u64 exit_qualification;
 
 	++kvm_stat.io_exits;
-	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);
-	kvm_run->exit_reason = KVM_EXIT_IO;
-	if (exit_qualification & 8)
+	exit_qualification = vmcs_read64(EXIT_QUALIFICATION);  // 读取reason的附加条件
+	kvm_run->exit_reason = KVM_EXIT_IO;   // 告诉qemu vm-exit 原因
+	if (exit_qualification & 8) // Table 28-5.  Exit Qualification for I/O Instructions
 		kvm_run->io.direction = KVM_EXIT_IO_IN;
 	else
 		kvm_run->io.direction = KVM_EXIT_IO_OUT;
-	kvm_run->io.size = (exit_qualification & 7) + 1;
+	kvm_run->io.size = (exit_qualification & 7) + 1;  //  I/O 操作的数据大小最小为1字节 0x0 -> 1字节
 	kvm_run->io.string = (exit_qualification & 16) != 0;
 	kvm_run->io.string_down
-		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;
-	kvm_run->io.rep = (exit_qualification & 32) != 0;
+		= (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_DF) != 0;  // 3.4.3.2 DF Flag
+	kvm_run->io.rep = (exit_qualification & 32) != 0;    // 重复次数
 	kvm_run->io.port = exit_qualification >> 16;
 	if (kvm_run->io.string) {
 		if (!get_io_count(vcpu, &kvm_run->io.count))
 			return 1;
-		kvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS);
+		kvm_run->io.address = vmcs_readl(GUEST_LINEAR_ADDRESS); // 32.15.2.3 Recording VM-Exit Information
 	} else
-		kvm_run->io.value = vcpu->regs[VCPU_REGS_RAX]; /* rax */
+		kvm_run->io.value = vcpu->regs[VCPU_REGS_RAX]; /* rax */  // IN—Input From Port
 	return 0;
 }
 
@@ -2410,9 +2410,10 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
  * to be done to userspace and return 0.
  */
+ // 如果return大于0,且没有信号进来的话，会回到kvm_dev_ioctl_run的again标签
 static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 				      struct kvm_run *kvm_run) = {
-	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,
+	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,   // 不可屏蔽中断
 	[EXIT_REASON_EXTERNAL_INTERRUPT]      = handle_external_interrupt,
 	[EXIT_REASON_IO_INSTRUCTION]          = handle_io,
 	[EXIT_REASON_INVLPG]                  = handle_invlpg,
@@ -2432,6 +2433,7 @@ static const int kvm_vmx_max_exit_handlers =
  * The guest has exited.  See if we can fix it or if we need userspace
  * assistance.
  */
+ // 如果return大于0,且没有信号进来的话，会回到kvm_dev_ioctl_run的again标签
 static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
@@ -2517,8 +2519,8 @@ static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 
 static void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
 {
-	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)
-	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0)
+	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)  // guest没有关中断
+	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0) 
 		/*
 		 * Interrupts enabled, and not blocked by sti or mov ss. Good.
 		 */
@@ -2529,7 +2531,7 @@ static void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
 		 */
 		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
 			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
-			     | CPU_BASED_VIRTUAL_INTR_PENDING);
+			     | CPU_BASED_VIRTUAL_INTR_PENDING);  // Table C-1.  Basic Exit Reasons -> INIT signal. An INIT signal arrived
 }
 
 static void kvm_guest_debug_pre(struct kvm_vcpu *vcpu)
@@ -2614,6 +2616,7 @@ again:
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 #endif
 
+	// 判断是否有中断需要注入
 	if (vcpu->irq_summary &&
 	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
 		kvm_try_inject_irq(vcpu);
@@ -2784,11 +2787,11 @@ again:
 		if (kvm_handle_exit(kvm_run, vcpu)) {
 			/* Give scheduler a change to reschedule. */
 			vcpu_put(vcpu);
-			if (signal_pending(current)) {
+			if (signal_pending(current)) {  // signal_pending() 如果有未处理的信号，则返回非零值
 				++kvm_stat.signal_exits;
-				return -EINTR;
+				return -EINTR;   // EINTR -> exit by interrupt  EINTR：Interrupted system call
 			}
-			cond_resched();
+			cond_resched();   // 让出当前cpu时间片
 			/* Cannot fail -  no vcpu unplug yet. */
 			vcpu_load(kvm, vcpu_slot(vcpu));
 			goto again;
