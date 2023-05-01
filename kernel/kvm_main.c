@@ -397,6 +397,7 @@ static int vcpu_slot(struct kvm_vcpu *vcpu)
  * Switches to specified vcpu, until a matching vcpu_put(), but assumes
  * vcpu mutex is already taken.
  */
+ /* 加在vcpu上下文到物理cpu */
 static struct kvm_vcpu *__vcpu_load(struct kvm_vcpu *vcpu)
 {
 	u64 phys_addr = __pa(vcpu->vmcs);
@@ -429,6 +430,7 @@ static struct kvm_vcpu *__vcpu_load(struct kvm_vcpu *vcpu)
 		 * Linux uses per-cpu TSS and GDT, so set these when switching
 		 * processors.
 		 */
+		/* linux没有 为每一个进程准备一个tss段，而是每一个cpu使用一个tss段 */ 
 		vmcs_writel(HOST_TR_BASE, read_tr_base()); /* 22.2.4 */
 		get_gdt(&dt);
 		vmcs_writel(HOST_GDTR_BASE, dt.base);   /* 22.2.4 */
@@ -1381,6 +1383,7 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 	vcpu->vmcs = vmcs;
 	vcpu->launched = 0;
 
+	/* 第一次create    vcpu， 还没有其他线程会使用，所以不需要调用vcpu_load来lock vcpu */
 	__vcpu_load(vcpu);
 
 	r = kvm_vcpu_setup(vcpu);
