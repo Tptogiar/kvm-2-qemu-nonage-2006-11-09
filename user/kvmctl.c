@@ -274,7 +274,7 @@ int handle_io(kvm_context_t kvm, struct kvm_run *run)
 	}
 
 	ioctl(kvm->fd, KVM_SET_REGS, &regs);   // 更新寄存器
-	run->emulated = 1;
+	run->emulated = 1;   /* 标记需要跳过指令 */
 	return 0;
 }
 
@@ -410,7 +410,8 @@ int kvm_run(kvm_context_t kvm, int vcpu)
 	};
 
 again:
-	r = ioctl(fd, KVM_RUN, &kvm_run);  // 从kvm返回
+	r = ioctl(fd, KVM_RUN, &kvm_run); /* 从kvm返回 */
+	/* 清除标记 */
 	kvm_run.emulated = 0;
 	kvm_run.mmio_completed = 0;
 	if (r == -1 && errno != EINTR) {

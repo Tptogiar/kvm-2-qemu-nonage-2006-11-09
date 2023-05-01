@@ -671,6 +671,13 @@ static void inject_gp(struct kvm_vcpu *vcpu)
 	printk(KERN_DEBUG "inject_general_protection: rip 0x%lx\n",
 	       vmcs_readl(GUEST_RIP));
 	vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+	/* 这里不用像 kvm_dev_ioctl_run 中先判断interrupt information中是否已经填写了别的中断，
+	* 因为这里的流程是从 kvm_vmx_exit_handlers 开始的，interrupt information中的内容已经在
+	* vm-entry时被消费了
+	*
+	* 这里的流程最终会流转到 kvm_dev_ioctl_run 中，到那里的时候，interrupt information中已经被填写了，
+	* 所以 kvm_dev_ioctl_run 得先判断是不是已经被填写了
+	*/
 	vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
 		     GP_VECTOR |
 		     INTR_TYPE_EXCEPTION |
@@ -1370,7 +1377,7 @@ static int kvm_dev_ioctl_create_vcpu(struct kvm *kvm, int n)
 		mutex_unlock(&vcpu->mutex);
 		goto out_free_vcpus;
 	}
-	vmcs_clear(vmcs);
+	vmcs_clear(vmcs);  /* vmclear */
 	vcpu->vmcs = vmcs;
 	vcpu->launched = 0;
 
@@ -1647,6 +1654,11 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 	/*
 	 * We emulated an instruction, so temporary interrupt blocking
 	 * should be removed, if set.
+	 */
+	 /* 如果vm-exit前正在执行如STI，MOV SS，POP这种指令，存在temporary interrupt blocking，
+	 * 这种temporary interrupt blocking在下一条指令执行结束后就会结束，由于这里模拟了指令，
+	 * 那temporary interrupt blocking也相当于结束了，所以这里需要修改guest的interruptlbility，
+	 * 以避免进入guest后，还是处于阻塞状态
 	 */
 	interruptibility = vmcs_read32(GUEST_INTERRUPTIBILITY_INFO);
 	if (interruptibility & 3)
@@ -1948,15 +1960,24 @@ static int handle_exception(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		printk(KERN_ERR "%s: unexpected, vectoring info 0x%x "
 		       "intr info 0x%x\n", __FUNCTION__, vect_info, intr_info);
 	}
-
-	if (is_external_interrupt(vect_info)) {        // 如果是外部中断           (?todo?:外部中断就必须得被guest处理?,有没有可能是host自己的设备给host的？)
-		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;   // 获取中断vector
+	/* 如果原始事件是外部中断 
+	* (?todo-answer?:外部中断就必须得被guest处理?,有没有可能是host自己的设备给host的？)
+	* (answer: 这里是在guest中注入外部中断后，guest 在delivery时引发的vm-exit，所以
+	* 这个原始事件的外部中断肯定得还给guest处理)
+	*/
+	if (is_external_interrupt(vect_info)) {
+		int irq = vect_info & VECTORING_INFO_VECTOR_MASK;
 		set_bit(irq, vcpu->irq_pending);
-		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);  // 标记，需要注入中断
+		/* 标记需要注入中断 */
+		set_bit(irq / BITS_PER_LONG, &vcpu->irq_summary);
 	}
 
-	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */  // guest-IDT delivery时，引发vm-exit的事件为NMI
-		asm ("int $2");   // 让host来处理NMI
+	/* guest-IDT delivery时，引发vm-exit的事件为NMI */
+	if ((intr_info & INTR_INFO_INTR_TYPE_MASK) == 0x200) { /* nmi */
+		/* 让host来处理NMI，走host IDT
+		* (?todo?: 为什么是让host处理，不能是guest处理？)
+		*/
+		asm ("int $2");
 		return 1;
 	}
 	error_code = 0;
@@ -2382,7 +2403,7 @@ static int handle_wrmsr(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		inject_gp(vcpu);
 		return 1;
 	}
-	skip_emulated_instruction(vcpu);
+	skip_emulated_instruction(vcpu);   // 跳过已经被模拟过了的指令
 	return 1;
 }
 
@@ -2393,12 +2414,18 @@ static int handle_interrupt_window(struct kvm_vcpu *vcpu,
 	vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
 		     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
 		     & ~CPU_BASED_VIRTUAL_INTR_PENDING);
-	return 1;
+	return 1; /* 返回1，让他回到 kvm_dev_ioctl_run ，重新判断时候有需要注入的中断 */
 }
 
 static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 {
+	/* 遇到中断等就会唤醒resume,所以不管有没有中断需要注入，
+	* 这条指令都是要被跳过的
+	*/
 	skip_emulated_instruction(vcpu);
+	/* 如果有中断需要注入，那halt前先重新跑一下 kvm_dev_ioctl_run 里的 again 标签，
+	* 那里有判断是否需要注入中断的逻辑
+	*/
 	if (vcpu->irq_summary && (vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF))
 		return 1;
 
@@ -2520,19 +2547,26 @@ static void kvm_do_inject_irq(struct kvm_vcpu *vcpu)
 
 static void kvm_try_inject_irq(struct kvm_vcpu *vcpu)
 {
-	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)  // guest没有关中断
-	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0) 
+	if ((vmcs_readl(GUEST_RFLAGS) & X86_EFLAGS_IF)  /* guest没有关中断 */
+	    && (vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0)  // 0x3 --> 11 --> blocking by STI和blocking by mov SS
 		/*
 		 * Interrupts enabled, and not blocked by sti or mov ss. Good.
 		 */
+		/* 如果vm-exit前在执行STI或是MOV SS，则不能注入中断 */
 		kvm_do_inject_irq(vcpu);
 	else
 		/*
 		 * Interrupts blocked.  Wait for unblock.
 		 */
+		/* 中断窗口内，interrupt-window exiting为1，就会导致vm-exit，reason为Interrupt window
+		* 然后流程就来到handlers的 handle_interrupt_window
+		*
+		* 中断窗口指，从STI指令的下一条指令执行完毕开始直到使用CLI或POPF指令关闭中断为止
+		* 
+		*/
 		vmcs_write32(CPU_BASED_VM_EXEC_CONTROL,
 			     vmcs_read32(CPU_BASED_VM_EXEC_CONTROL)
-			     | CPU_BASED_VIRTUAL_INTR_PENDING);  // Table C-1.  Basic Exit Reasons -> INIT signal. An INIT signal arrived
+			     | CPU_BASED_VIRTUAL_INTR_PENDING);  
 }
 
 static void kvm_guest_debug_pre(struct kvm_vcpu *vcpu)
@@ -2583,6 +2617,7 @@ static int kvm_dev_ioctl_run(struct kvm *kvm, struct kvm_run *kvm_run)
 	if (!vcpu)
 		return -ENOENT;
 
+	/* 判断是否需要跳过指令，如在qemu中 handle_io 后 */
 	if (kvm_run->emulated) {
 		skip_emulated_instruction(vcpu);
 		kvm_run->emulated = 0;
@@ -2617,7 +2652,16 @@ again:
 	vmcs_writel(HOST_GS_BASE, read_msr(MSR_GS_BASE));
 #endif
 
-	// 判断是否有中断需要注入
+
+	/* 判断是否有中断需要注入
+	*
+	* VM-entry interruption information 字段无效 
+	* 也就是说当前没有别的中断需要被注入到guest中(字段已经填写了该中断)，一次只注入一个中断
+	* 相关解释在这个函数 inject_gp
+	*
+	* (?todo?:如果已经有别的中断填写在该字段，那当前中断就得等到下一次 kvm_dev_ioctl_run 被重新执行？
+	* 那这个中断不是得等很久？)
+	*/
 	if (vcpu->irq_summary &&
 	    !(vmcs_read32(VM_ENTRY_INTR_INFO_FIELD) & INTR_INFO_VALID_MASK))
 		kvm_try_inject_irq(vcpu);
@@ -2677,7 +2721,7 @@ again:
 		"mov %c[rbp](%3), %%ebp \n\t"
 		"mov %c[rcx](%3), %%ecx \n\t" /* kills %3 (ecx) */
 #endif
-		/* Enter guest mode */
+		/* Enter guest mode */     /* 进入guest */
 		"jne launched \n\t"
 		ASM_VMX_VMLAUNCH "\n\t"
 		"jmp kvm_vmx_return \n\t"

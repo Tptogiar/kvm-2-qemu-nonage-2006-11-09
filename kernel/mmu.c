@@ -466,8 +466,15 @@ static void inject_page_fault(struct kvm_vcpu *vcpu,
 		       "double fault 0x%llx @ 0x%lx\n",
 		       addr, vmcs_readl(GUEST_RIP));
 		vmcs_write32(VM_ENTRY_EXCEPTION_ERROR_CODE, 0);
+		/* (?todo-answer?: 为什么这里要注入一个DF异常) 
+		* (answer: Table 6-5.  Conditions for Generating a Double Fault 
+		* page fault 里面再次出现page fault将产生DF异常
+		* 流程能走到这里说明VM-exit interrupt information是page fault，而这里IDT-vectoring information也是
+		* page fault，而是page fault里面又出现page fault)
+		*/
+		
 		vmcs_write32(VM_ENTRY_INTR_INFO_FIELD,
-			     DF_VECTOR |
+			     DF_VECTOR | 
 			     INTR_TYPE_EXCEPTION |
 			     INTR_INFO_DELIEVER_CODE_MASK |
 			     INTR_INFO_VALID_MASK);

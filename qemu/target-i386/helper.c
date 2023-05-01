@@ -1325,6 +1325,7 @@ void helper_cmpxchg8b(void)
     CC_SRC = eflags;
 }
 
+/* 相应的实现函数 */
 void helper_cpuid(void)
 {
     uint32_t index;

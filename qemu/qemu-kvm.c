@@ -428,7 +428,8 @@ static int kvm_halt(void *opaque, int vcpu)
     }
     return 1;
 }
- 
+
+/* qemu对应的模拟函数 */
 static struct kvm_callbacks qemu_kvm_ops = {
     .cpuid = kvm_cpuid,
     .debug = kvm_debug,

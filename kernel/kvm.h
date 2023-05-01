@@ -220,7 +220,7 @@ struct kvm {
 	int nmemslots;
 	struct kvm_memory_slot memslots[KVM_MEMORY_SLOTS];
 	struct list_head active_mmu_pages;
-	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];
+	struct kvm_vcpu vcpus[KVM_MAX_VCPUS];  /* CPU 槽 */
 	int memory_config_version;
 	int busy;
 };

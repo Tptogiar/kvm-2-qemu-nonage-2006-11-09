@@ -33,8 +33,8 @@ enum kvm_exit_reason {
 struct kvm_run {
 	/* in */
 	__u32 vcpu;
-	__u32 emulated;  /* skip current instruction */
-	__u32 mmio_completed; /* mmio request completed */
+	__u32 emulated;  /* skip current instruction 标记 kvm_dev_ioctl_run 时是否需要跳过指令 */
+	__u32 mmio_completed; /* mmio request completed 标记在qemu中是否已经完成mmio */
 
 	/* out */
 	__u32 exit_type;   // kvm run后的退出类型，包括run失败，vm-exit等
