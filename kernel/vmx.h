@@ -24,7 +24,7 @@
  *    Yaniv Kamay <yaniv@qumranet.com>
  *
  */
-// Table C-1.  Basic Exit Reasons ?
+
 #define CPU_BASED_VIRTUAL_INTR_PENDING  0x00000004
 #define CPU_BASED_USE_TSC_OFFSETING     0x00000008
 #define CPU_BASED_HLT_EXITING           0x00000080

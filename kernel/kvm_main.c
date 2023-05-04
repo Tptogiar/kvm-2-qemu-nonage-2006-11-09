@@ -2441,7 +2441,11 @@ static int handle_halt(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
  * may resume.  Otherwise they set the kvm_run parameter to indicate what needs
  * to be done to userspace and return 0.
  */
-// return大于0，且进程没有收到信号的情况下，会回到kvm_dev_ioctl_run的again标签
+/* 
+* return大于0，且进程没有收到信号的情况下，会回到kvm_dev_ioctl_run的again标签
+* caller kvm_handle_exit
+* kvm_dev_ioctl_run 
+*/
 static int (*kvm_vmx_exit_handlers[])(struct kvm_vcpu *vcpu,
 				      struct kvm_run *kvm_run) = {
 	[EXIT_REASON_EXCEPTION_NMI]           = handle_exception,   // 不可屏蔽中断 或 异常
@@ -2465,6 +2469,7 @@ static const int kvm_vmx_max_exit_handlers =
  * assistance.
  */
  // return大于0，且进程没有收到信号的情况下，会回到kvm_dev_ioctl_run的again标签
+ // caller kvm_dev_ioctl_run
 static int kvm_handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 {
 	u32 vectoring_info = vmcs_read32(IDT_VECTORING_INFO_FIELD);
